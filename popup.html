@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FL Job Radar</title>
+    <link rel="stylesheet" href="popup.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="container">
+
+    <!-- ── Header ── -->
+    <header>
+        <div class="logo-area">
+            <div class="radar-ring">
+                <div class="radar-dot"></div>
+            </div>
+            <div class="logo-text">
+                <h1>FL Job Radar</h1>
+                <span class="logo-sub">Freelancer.com</span>
+            </div>
+        </div>
+        <div class="header-right" style="display:flex; align-items:center; gap:8px;">
+            <button id="clean-all-btn" class="text-btn" title="Clear all logs and matches" style="font-size: 12px;">🧹 Clean All</button>
+            <div class="status-badge" id="scan-status">Idle</div>
+        </div>
+    </header>
+
+    <!-- ── Tabs ── -->
+    <div class="tab-bar">
+        <button class="tab-btn active" data-tab="settings">⚙️ Settings</button>
+        <button class="tab-btn"        data-tab="matches">🎯 Matches</button>
+        <button class="tab-btn"        data-tab="log">📋 Log</button>
+    </div>
+
+    <!-- ══════ TAB: Settings ══════ -->
+    <div class="tab-content active" id="tab-settings">
+
+        <div class="section-label">🔍 Search</div>
+
+        <div class="row">
+            <div class="input-group">
+                <label for="keyword">Keywords <span class="hint">(comma separated)</span></label>
+                <input type="text" id="keyword" placeholder="e.g. wordpress, laravel, react">
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="input-group">
+                <label for="exclude-country">Exclude Countries <span class="hint">(comma separated)</span></label>
+                <input type="text" id="exclude-country" placeholder="e.g. United States,Canada,United Kingdom">
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="input-group">
+                <label for="max-age">Max Age <span class="hint">(min)</span></label>
+                <input type="number" id="max-age" value="30" min="1">
+            </div>
+            <div class="input-group">
+                <label for="match-limit">Match Limit</label>
+                <input type="number" id="match-limit" value="5" min="1">
+            </div>
+        </div>
+
+        <div class="toggle-row">
+            <label class="toggle-label" for="one-time-scan">
+                <input type="checkbox" id="one-time-scan">
+                <span class="toggle-text">One-Time Sweep (scan once &amp; stop)</span>
+            </label>
+        </div>
+
+        <div class="divider"></div>
+        <div class="section-label">⏱️ Scan Interval</div>
+
+        <div id="interval-container" class="input-group">
+            <label>Refresh Range <span class="hint">(seconds)</span></label>
+            <div class="range-row">
+                <input type="number" id="min-interval" value="120" placeholder="Min">
+                <span class="range-dash">—</span>
+                <input type="number" id="max-interval" value="240" placeholder="Max">
+            </div>
+        </div>
+
+        <div class="divider"></div>
+        <div class="section-label">🧑 Client Filters</div>
+
+        <div class="row">
+            <div class="input-group">
+                <label for="min-rating">Min Rating <span class="hint">(0-5)</span></label>
+                <input type="number" id="min-rating" value="0" min="0" max="5" step="0.1">
+            </div>
+            <div class="input-group">
+                <label for="min-reviews">Min Reviews</label>
+                <input type="number" id="min-reviews" value="0" min="0">
+            </div>
+        </div>
+
+        <div class="toggle-row" style="margin-top: 5px;">
+            <label class="toggle-label" for="req-payment">
+                <input type="checkbox" id="req-payment">
+                <span class="toggle-text">Require Payment Verified</span>
+            </label>
+        </div>
+        <div class="toggle-row">
+            <label class="toggle-label" for="req-deposit">
+                <input type="checkbox" id="req-deposit">
+                <span class="toggle-text">Require Deposit Made</span>
+            </label>
+        </div>
+        <div class="toggle-row">
+            <label class="toggle-label" for="req-identity">
+                <input type="checkbox" id="req-identity">
+                <span class="toggle-text">Require Identity Verified</span>
+            </label>
+        </div>
+        <div class="toggle-row">
+            <label class="toggle-label" for="req-phone">
+                <input type="checkbox" id="req-phone">
+                <span class="toggle-text">Require Phone Verified</span>
+            </label>
+        </div>
+        <div class="toggle-row">
+            <label class="toggle-label" for="req-email">
+                <input type="checkbox" id="req-email">
+                <span class="toggle-text">Require Email Verified</span>
+            </label>
+        </div>
+
+        <div class="divider" style="margin-top: 8px;"></div>
+        <div class="section-label">🤖 Auto-Bid</div>
+
+        <div class="toggle-row">
+            <label class="toggle-label" for="auto-bid">
+                <input type="checkbox" id="auto-bid">
+                <span class="toggle-text">Enable Auto-Bid (fill form automatically)</span>
+            </label>
+        </div>
+
+        <div id="bid-options">
+
+            <!-- Bid Strategy -->
+            <div class="row">
+                <div class="input-group">
+                    <label for="bid-strategy">Bid Amount Strategy</label>
+                    <select id="bid-strategy">
+                        <option value="min">Minimum (lowest budget)</option>
+                        <option value="avg" selected>Average (mid budget)</option>
+                        <option value="max">Maximum (highest budget)</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label for="delivery-days">Delivery <span class="hint">(days)</span></label>
+                    <input type="number" id="delivery-days" value="7" min="1">
+                </div>
+            </div>
+
+            <!-- Cover Letter Mode -->
+            <div class="input-group" style="margin-top: 6px;">
+                <label>Cover Letter</label>
+                <div class="toggle-row" style="margin-top: 4px;">
+                    <label class="toggle-label" for="cover-mode-ai">
+                        <input type="radio" id="cover-mode-ai" name="cover-mode" value="ai">
+                        <span class="toggle-text">🤖 Use AI "Write My Bid"</span>
+                    </label>
+                </div>
+                <div class="toggle-row">
+                    <label class="toggle-label" for="cover-mode-template">
+                        <input type="radio" id="cover-mode-template" name="cover-mode" value="template" checked>
+                        <span class="toggle-text">📝 Use My Template</span>
+                    </label>
+                </div>
+            </div>
+
+            <div id="cover-letter-box">
+                <div class="input-group">
+                    <textarea id="cover-letter" rows="5" placeholder="Write your proposal template here...&#10;&#10;Available placeholders:&#10;{PROJECT_NAME} — project title&#10;{BUDGET} — project budget&#10;{SKILLS} — required skills"></textarea>
+                </div>
+            </div>
+
+            <!-- Submit Options -->
+            <div class="toggle-row" style="margin-top: 6px;">
+                <label class="toggle-label" for="auto-submit">
+                    <input type="checkbox" id="auto-submit">
+                    <span class="toggle-text">⚡ Auto Submit (click Place Bid automatically)</span>
+                </label>
+            </div>
+
+        </div>
+
+        <!-- ── Action Buttons ── -->
+        <button id="manual-fill-btn" class="btn-secondary" style="margin-bottom: 8px; width: 100%; border: 1px solid #00c4b4; background: transparent; color: #00c4b4; padding: 10px; border-radius: 4px; font-weight: bold; cursor: pointer;">⚡ Fill Current Page</button>
+        <button id="toggle-btn" class="btn-primary">▶ Start Monitoring</button>
+    </div>
+
+    <!-- ══════ TAB: Matches ══════ -->
+    <div class="tab-content" id="tab-matches">
+        <div class="matches-toolbar">
+            <span id="match-count-label">No matches yet</span>
+            <button id="open-all-btn" class="btn-small" style="display:none">Open All</button>
+        </div>
+        <ul id="job-list">
+            <div class="empty-state">
+                <div class="empty-icon">🎯</div>
+                <p>No matches yet.<br>Start the radar to begin.</p>
+            </div>
+        </ul>
+        <div class="matches-footer">
+            <span id="seen-count">Seen: 0</span>
+            <span id="match-count">Matched: 0</span>
+            <button id="clear-history" class="text-btn">Clear</button>
+        </div>
+    </div>
+
+    <!-- ══════ TAB: Log ══════ -->
+    <div class="tab-content" id="tab-log">
+        <div class="log-toolbar">
+            <span class="log-title">Activity Log</span>
+            <button id="clear-log-btn" class="text-btn">Clear Log</button>
+        </div>
+        <div id="log-container">
+            <p class="log-entry">Waiting for start...</p>
+        </div>
+    </div>
+
+</div>
+<script src="popup.js"></script>
+</body>
+</html>
