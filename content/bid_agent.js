@@ -7,24 +7,6 @@
 
     console.log('[FL Radar] Bid Agent Active');
 
-    // ── Manual Fill Listener (Always Active) ─────────────────────────────────
-    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-        if (request.action === 'manualFill') {
-            chrome.storage.local.get(['settings'], async (res) => {
-                const settings = res.settings;
-                if (!settings) return;
-                console.log('[FL Radar] Manual fill triggered');
-                
-                const title = extractTitle();
-                const budgetInfo = extractBudget();
-                const skills = extractSkills();
-                
-                await fillThreeFields(settings, title, budgetInfo, skills);
-                chrome.runtime.sendMessage({ action: 'log', text: '[Bid Agent] ✅ Manual Fill completed.' }).catch(() => {});
-            });
-        }
-    });
-
     // ── Guard 1: Is radar even running? ──────────────────────────────────────
     const runCheck = await chrome.storage.local.get(['isRunning']).catch(() => ({}));
     if (!runCheck.isRunning) {
@@ -46,15 +28,16 @@
     await sleep(2500);
 
     // ── Extract project info ─────────────────────────────────────────────────
-    const id         = extractProjectId();
-    const title      = extractTitle();
-    const budgetInfo = extractBudget();
-    const skills     = extractSkills();
-    const country    = extractCountry();
+    const id          = extractProjectId();
+    const title       = extractTitle();
+    const budgetInfo  = extractBudget();
+    const skills      = extractSkills();
+    const description = extractDescription();
+    const country     = extractCountry();
 
     chrome.runtime.sendMessage({
         action: 'log',
-        text: `[Bid Agent] "${title}" | Budget: ${budgetInfo.text} | Client: ${country || 'Unknown'}`
+        text: `[Bid Agent] "${title}" | Budget: ${budgetInfo.text} | Skills: ${skills.join(', ') || 'none'} | Client: ${country || 'Unknown'}`
     }).catch(() => {});
 
     // ── Load settings ────────────────────────────────────────────────────────
@@ -85,34 +68,6 @@
         return;
     }
 
-    // ── Client Filters ───────────────────────────────────────────────────────
-    const clientRating = extractClientRating();
-    const reviewCount  = extractReviewCount();
-    const verifs       = extractVerifications();
-
-    let skipReason = '';
-
-    if (settings?.minRating > 0 && clientRating < settings.minRating) {
-        skipReason = `Rating ${clientRating} < ${settings.minRating}`;
-    } else if (settings?.minReviews > 0 && reviewCount < settings.minReviews) {
-        skipReason = `Reviews ${reviewCount} < ${settings.minReviews}`;
-    } else if (settings?.reqPayment && !verifs.payment) {
-        skipReason = `Payment not verified`;
-    } else if (settings?.reqDeposit && !verifs.deposit) {
-        skipReason = `Deposit not made`;
-    } else if (settings?.reqIdentity && !verifs.identity) {
-        skipReason = `Identity not verified`;
-    } else if (settings?.reqPhone && !verifs.phone) {
-        skipReason = `Phone not verified`;
-    } else if (settings?.reqEmail && !verifs.email) {
-        skipReason = `Email not verified`;
-    }
-
-    if (skipReason) {
-        await skipJob(`[Bid Agent] Skipped — Client Filter: ${skipReason}`);
-        return;
-    }
-
     // ── Country Exclude validation ─────────────────────────────────────────────────
     if (settings?.excludeCountry && country) {
         const excludeList = settings.excludeCountry.split(',').map(c => c.trim().toLowerCase()).filter(Boolean);
@@ -120,6 +75,27 @@
         if (isExcluded) {
             await skipJob(`[Bid Agent] Skipped — Country "${country}" is in exclude list.`);
             return;
+        }
+    }
+
+    // ── Skill Match filter (before apply) ────────────────────────────────────
+    if (settings?.skillMatchEnabled && settings?.myKeywords) {
+        const userKeywords = settings.myKeywords.split(',').map(k => k.trim()).filter(Boolean);
+        if (userKeywords.length > 0) {
+            const threshold = settings.skillMatchThreshold || 70;
+            const matchResult = computeSkillMatch(userKeywords, title, skills, description);
+
+            chrome.runtime.sendMessage({
+                action: 'log',
+                text: `[Bid Agent] Skill match: ${matchResult.percent}% (${matchResult.matched.length}/${matchResult.total}) — matched: [${matchResult.matched.join(', ') || 'none'}]`
+            }).catch(() => {});
+
+            if (matchResult.percent < threshold) {
+                await skipJob(
+                    `[Bid Agent] Skipped — Skill match ${matchResult.percent}% < ${threshold}% (job skills: [${skills.join(', ') || 'none'}])`
+                );
+                return;
+            }
         }
     }
 
@@ -148,11 +124,8 @@
             }).catch(() => {});
         } else {
             chrome.runtime.sendMessage({ action: 'log', text: '[Bid Agent] Form filled. 🔔 Please review and submit manually!' }).catch(() => {});
-            for (let i = 0; i < 3; i++) {
-                chrome.runtime.sendMessage({ action: 'playSound' }).catch(() => {});
-                await sleep(1000);
-            }
-            await sleep(2000);
+            chrome.runtime.sendMessage({ action: 'playSound' }).catch(() => {});
+            await sleep(1000);
             chrome.runtime.sendMessage({
                 action: 'bidDone',
                 id, title, url: window.location.href,
@@ -277,6 +250,11 @@
     }
 
     function extractTitle() {
+        const cardTitles = document.querySelectorAll('.ProjectDetailsCard-title');
+        for (const el of cardTitles) {
+            const t = el.innerText?.trim();
+            if (t && t.toLowerCase() !== 'project details') return t;
+        }
         const el = document.querySelector(
             'h1.PageProjectViewInfo-title, ' +
             '.ProjectViewHeader-title h1, ' +
@@ -288,6 +266,8 @@
 
     function extractBudget() {
         const el = document.querySelector(
+            '.ProjectViewDetails-budget p, ' +
+            'app-project-details-budget p, ' +
             '.PageProjectViewInfo-budget, ' +
             '[class*="budget"], ' +
             '[class*="Budget"], ' +
@@ -302,12 +282,57 @@
     }
 
     function extractSkills() {
+        const tagEls = document.querySelectorAll(
+            'app-project-details-skills fl-tag .Content, ' +
+            'fl-tag[fltrackinglabel="ProjectSkillTag"] .Content, ' +
+            '.ProjectViewDetailsSkills .Content'
+        );
+        if (tagEls.length > 0) {
+            return [...new Set(Array.from(tagEls).map(e => e.innerText?.trim()).filter(Boolean))];
+        }
         const els = document.querySelectorAll(
             '.PageProjectViewInfo-skills a, ' +
             '[class*="skill"] a, ' +
             '[class*="tag"] a'
         );
         return Array.from(els).map(e => e.innerText?.trim()).filter(Boolean);
+    }
+
+    function extractDescription() {
+        const el = document.querySelector(
+            'app-project-details-description .ContentWrapper span, ' +
+            'app-project-details-description fl-interactive-text span, ' +
+            '.ProjectDescription .whitespace-pre-line'
+        );
+        return el?.innerText?.trim() || '';
+    }
+
+    function normalizeMatchText(text) {
+        return (text || '').toLowerCase().replace(/[^a-z0-9+#\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+
+    function keywordMatchesJob(userKw, jobTitle, jobSkills, jobDescription) {
+        const normKw = normalizeMatchText(userKw);
+        if (!normKw || normKw.length < 2) return false;
+
+        const textPool = normalizeMatchText([jobTitle, jobDescription].join(' '));
+        if (textPool.includes(normKw)) return true;
+
+        for (const skill of jobSkills) {
+            const normSkill = normalizeMatchText(skill);
+            if (!normSkill) continue;
+            if (normSkill.includes(normKw) || normKw.includes(normSkill)) return true;
+
+            const kwWords = normKw.split(' ').filter(w => w.length >= 2);
+            if (kwWords.length > 1 && kwWords.every(w => normSkill.includes(w))) return true;
+        }
+        return false;
+    }
+
+    function computeSkillMatch(userKeywords, jobTitle, jobSkills, jobDescription) {
+        const matched = userKeywords.filter(kw => keywordMatchesJob(kw, jobTitle, jobSkills, jobDescription));
+        const percent = Math.round((matched.length / userKeywords.length) * 100);
+        return { percent, matched, total: userKeywords.length };
     }
 
     function extractCountry() {
@@ -350,50 +375,6 @@
             }
         }
         return '';
-    }
-
-    function extractClientRating() {
-        const el = document.querySelector('fl-rating .ValueBlock, [class*="Rating"] .ValueBlock');
-        return el ? parseFloat(el.innerText?.trim()) || 0 : 0;
-    }
-
-    function extractReviewCount() {
-        const el = document.querySelector('fl-review-count span, [class*="ReviewCount"] span');
-        return el ? parseInt(el.innerText?.trim()) || 0 : 0;
-    }
-
-    function extractVerifications() {
-        const verifs = {
-            payment: false,
-            deposit: false,
-            identity: false,
-            phone: false,
-            email: false
-        };
-
-        const wrappers = document.querySelectorAll('app-user-verifications [mattooltip], .PageProjectViewClient-verifications [mattooltip]');
-        
-        if (wrappers.length > 0) {
-            wrappers.forEach(el => {
-                const tip = (el.getAttribute('mattooltip') || '').toLowerCase();
-                // In the new DOM, the tooltip text changes. If unverified, it contains "not".
-                if (tip.includes('payment method') && !tip.includes('not ')) verifs.payment = true;
-                if (tip.includes('deposit') && !tip.includes('not ')) verifs.deposit = true;
-                if (tip.includes('identity') && !tip.includes('not ')) verifs.identity = true;
-                if (tip.includes('phone number') && !tip.includes('not ')) verifs.phone = true;
-                if (tip.includes('email') && !tip.includes('not ')) verifs.email = true;
-            });
-        } else {
-            // Fallback for older DOM structures where the text only appears if verified
-            const text = document.body.innerText.toLowerCase();
-            verifs.payment  = text.includes('payment verified');
-            verifs.deposit  = text.includes('deposit made');
-            verifs.identity = text.includes('identity verified');
-            verifs.phone    = text.includes('phone verified');
-            verifs.email    = text.includes('email verified');
-        }
-
-        return verifs;
     }
 
     async function fillBidAmount(amount) {
@@ -460,9 +441,12 @@
     async function waitForProjectPage() {
         return new Promise((resolve) => {
             const check = () => !!(
+                document.querySelector('app-project-details-skills') ||
+                document.querySelector('.ProjectViewDetailsSkills') ||
                 document.querySelector('#place-bid, #bid-section') ||
                 document.querySelector('[class*="BidBox"]') ||
                 document.querySelector('[class*="PageProjectView"]') ||
+                document.querySelector('.ProjectDetailsCard-title') ||
                 document.querySelector('h1') ||
                 document.querySelector('main')
             );

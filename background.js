@@ -1,8 +1,9 @@
 // background.js — Freelancer Job Radar
 
-const ALARM_SCAN         = 'fl-radar-scan';
-const ALARM_NEXT_KEYWORD = 'fl-radar-next-keyword';
-const ALARM_NEXT_JOB     = 'fl-radar-next-job';
+const ALARM_SCAN     = 'fl-radar-scan';
+const ALARM_NEXT_JOB = 'fl-radar-next-job';
+
+const SEARCH_URL = 'https://www.freelancer.com/search/projects?projectSort=latest';
 
 let sessionMatchCount  = 0;
 let activeSearchTabId  = null;
@@ -26,9 +27,8 @@ chrome.runtime.onInstalled.addListener(() => {
         logs:               [],
         jobQueue:           [],
         isProcessingQueue:  false,
-        scanCount:          0,
-        currentKeywordIndex: 0,
-        cycleStartTime:     0
+        scanCount:      0,
+        cycleStartTime: 0
     });
 });
 
@@ -39,15 +39,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             sendLog('Radar Started');
             sessionMatchCount = 0;
             isOnBreak = false;
-            // Wait for storage to be ready before scanning
-            // The popup already saved settings — read them to confirm
-            chrome.storage.local.get(['settings'], (r) => {
-                const kw = r.settings?.keyword || '(no keyword)';
-                sendLog(`[Settings] Keyword: "${kw}"`);
-            });
             chrome.storage.local.set({
                 jobQueue: [], isProcessingQueue: false,
-                scanCount: 0, currentKeywordIndex: 0, cycleStartTime: 0
+                scanCount: 0, cycleStartTime: 0
             }, () => {
                 // Only start AFTER storage is confirmed written
                 startScanning();
@@ -130,7 +124,7 @@ function scheduleNextScan(min, max) {
 
 // ─── Alarm Dispatcher ─────────────────────────────────────────────────────────
 chrome.alarms.onAlarm.addListener((alarm) => {
-    if (alarm.name === ALARM_SCAN || alarm.name === ALARM_NEXT_KEYWORD) {
+    if (alarm.name === ALARM_SCAN) {
         performScan();
     } else if (alarm.name === ALARM_NEXT_JOB) {
         executeNextJobInQueue();
@@ -156,7 +150,7 @@ async function cleanupSeenIds(settings) {
 
 // ─── Core Scan ────────────────────────────────────────────────────────────────
 async function performScan() {
-    const res = await chrome.storage.local.get(['isRunning', 'settings', 'scanCount', 'currentKeywordIndex']);
+    const res = await chrome.storage.local.get(['isRunning', 'settings', 'scanCount']);
     if (!res.isRunning) return;
 
     // Ghost Mode: coffee break
@@ -184,35 +178,15 @@ async function performScan() {
         return;
     }
 
-    let keywords = settings.keyword ? settings.keyword.split(',').map(k => k.trim()).filter(Boolean) : [];
-    if (keywords.length === 0) {
-        keywords.push(''); // Empty string for "All Projects"
-    }
+    chrome.storage.local.set({ cycleStartTime: Date.now() });
+    sessionMatchCount = 0;
 
-    const index    = (res.currentKeywordIndex || 0) % keywords.length;
-    const keyword  = keywords[index];
+    sendLog(`Scan #${currentScanCount}: All Projects`);
+    chrome.runtime.sendMessage({ action: 'status', text: 'Scanning: All Projects' }).catch(() => {});
 
-    if (index === 0) {
-        chrome.storage.local.set({ cycleStartTime: Date.now() });
-        sessionMatchCount = 0;
-    }
+    sendLog(`[URL] Opening: ${SEARCH_URL}`);
 
-    const scanLabel = keyword ? `"${keyword}"` : "All Projects";
-    sendLog(`Scan #${currentScanCount}: ${scanLabel} (${index + 1}/${keywords.length})`);
-    chrome.runtime.sendMessage({ action: 'status', text: `Scanning: ${keyword || 'All'}` }).catch(() => {});
-
-    // Freelancer.com search URL as requested by user
-    let url;
-    if (keyword) {
-        const encoded = encodeURIComponent(keyword);
-        url = `https://www.freelancer.com/search/projects?q=${encoded}&projectSort=latest`;
-    } else {
-        url = `https://www.freelancer.com/search/projects?projectSort=latest`;
-    }
-
-    sendLog(`[URL] Opening: ${url}`);
-
-    chrome.tabs.create({ url, active: false }, (tab) => {
+    chrome.tabs.create({ url: SEARCH_URL, active: false }, (tab) => {
         activeSearchTabId = tab.id;
         chrome.storage.local.get(['openedTabIds'], (r) => {
             const openedTabIds = [...(r.openedTabIds || []), tab.id];
@@ -248,13 +222,13 @@ async function addToQueue(jobs) {
         sendLog(`Found ${jobs.length} projects. Queuing ${newJobs} new.`);
         if (!isProcessingQueue) processQueue(true);
     } else {
-        sendLog(`No new projects for "${jobs[0]?.keyword || 'keyword'}".`);
+        sendLog('No new projects found.');
         onBatchComplete();
     }
 }
 
 async function onBatchComplete() {
-    const res = await chrome.storage.local.get(['settings', 'currentKeywordIndex', 'isRunning', 'jobQueue']);
+    const res = await chrome.storage.local.get(['settings', 'isRunning', 'jobQueue']);
     if (!res.isRunning) return;
     if (res.jobQueue && res.jobQueue.length > 0) return;
 
@@ -263,33 +237,17 @@ async function onBatchComplete() {
         activeSearchTabId = null;
     }
 
-    const keywords    = (res.settings?.keyword || '').split(',').map(k => k.trim()).filter(Boolean);
-    const currentIdx  = res.currentKeywordIndex || 0;
-    const nextIdx     = currentIdx + 1;
-
-    if (res.settings?.oneTimeScan && nextIdx >= keywords.length) {
-        sendLog(`[Sweep] All keywords done. Stopping.`);
-        chrome.storage.local.set({ isRunning: false, currentKeywordIndex: 0 });
+    if (res.settings?.oneTimeScan) {
+        sendLog('[Sweep] Scan complete. Stopping.');
+        chrome.storage.local.set({ isRunning: false });
         chrome.runtime.sendMessage({ action: 'stop' }).catch(() => {});
         stopScanning();
         return;
     }
 
-    if (nextIdx < keywords.length) {
-        chrome.storage.local.set({ currentKeywordIndex: nextIdx });
-        const wait = Math.floor(Math.random() * 15) + 20;
-        sendLog(`Next keyword in ${wait}s...`);
-        chrome.alarms.create(ALARM_NEXT_KEYWORD, { delayInMinutes: wait / 60 });
-    } else {
-        sendLog(`[Cycle Complete] Resting...`);
-        chrome.storage.local.set({ currentKeywordIndex: 0 });
-        if (!res.settings?.oneTimeScan) {
-            chrome.runtime.sendMessage({ action: 'status', text: 'Monitoring (Idle)' }).catch(() => {});
-            scheduleNextScan(res.settings?.minInterval || 150, res.settings?.maxInterval || 250);
-        } else {
-            stopScanning();
-        }
-    }
+    sendLog('[Cycle Complete] Resting...');
+    chrome.runtime.sendMessage({ action: 'status', text: 'Monitoring (Idle)' }).catch(() => {});
+    scheduleNextScan(res.settings?.minInterval || 150, res.settings?.maxInterval || 250);
 }
 
 async function processQueue(immediate = false) {

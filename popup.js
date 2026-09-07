@@ -1,7 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
 
     // ── Element refs ──────────────────────────────────────────────────────────
-    const keywordInput       = document.getElementById('keyword');
     const excludeCountryInput= document.getElementById('exclude-country');
     const maxAgeInput        = document.getElementById('max-age');
     const matchLimitInput    = document.getElementById('match-limit');
@@ -9,15 +8,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const minIntervalInput   = document.getElementById('min-interval');
     const maxIntervalInput   = document.getElementById('max-interval');
     const intervalContainer  = document.getElementById('interval-container');
-    
-    // Client Filters
-    const minRatingInput     = document.getElementById('min-rating');
-    const minReviewsInput    = document.getElementById('min-reviews');
-    const reqPaymentInput    = document.getElementById('req-payment');
-    const reqDepositInput    = document.getElementById('req-deposit');
-    const reqIdentityInput   = document.getElementById('req-identity');
-    const reqPhoneInput      = document.getElementById('req-phone');
-    const reqEmailInput      = document.getElementById('req-email');
+
+    const skillMatchEnabled  = document.getElementById('skill-match-enabled');
+    const skillMatchOptions  = document.getElementById('skill-match-options');
+    const myKeywordsInput    = document.getElementById('my-keywords');
+    const skillMatchThreshold= document.getElementById('skill-match-threshold');
 
     const autoBidInput       = document.getElementById('auto-bid');
     const bidOptions         = document.getElementById('bid-options');
@@ -30,7 +25,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const autoSubmitInput    = document.getElementById('auto-submit');
     const toggleBtn          = document.getElementById('toggle-btn');
     const scanStatus         = document.getElementById('scan-status');
-    const manualFillBtn      = document.getElementById('manual-fill-btn');
 
     // Matches tab
     const jobList            = document.getElementById('job-list');
@@ -62,6 +56,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── Conditional UI ────────────────────────────────────────────────────────
     oneTimeScanInput.addEventListener('change', updateIntervalVisibility);
     autoBidInput.addEventListener('change', updateBidOptionsVisibility);
+    skillMatchEnabled.addEventListener('change', updateSkillMatchVisibility);
+
+    function updateSkillMatchVisibility() {
+        skillMatchOptions.style.display = skillMatchEnabled.checked ? 'block' : 'none';
+    }
 
     function updateIntervalVisibility() {
         intervalContainer.style.display = oneTimeScanInput.checked ? 'none' : 'flex';
@@ -87,12 +86,13 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.storage.local.get(['settings', 'matches', 'stats', 'isRunning', 'logs'], (res) => {
         const s = res.settings || {};
 
-        if (s.keyword)           keywordInput.value        = s.keyword;
         if (s.excludeCountry)    excludeCountryInput.value = s.excludeCountry;
         if (s.maxAge    != null) maxAgeInput.value         = s.maxAge;
         if (s.matchLimit!= null) matchLimitInput.value     = s.matchLimit;
         if (s.minInterval!=null) minIntervalInput.value    = s.minInterval;
         if (s.maxInterval!=null) maxIntervalInput.value    = s.maxInterval;
+        if (s.myKeywords)        myKeywordsInput.value      = s.myKeywords;
+        if (s.skillMatchThreshold != null) skillMatchThreshold.value = s.skillMatchThreshold;
         if (s.deliveryDays!=null) deliveryDaysInput.value  = s.deliveryDays;
         if (s.coverLetter)       coverLetterInput.value    = s.coverLetter;
         if (s.bidStrategy)       bidStrategyInput.value    = s.bidStrategy;
@@ -105,18 +105,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         autoSubmitInput.checked  = !!s.autoSubmit;
 
-        if (s.minRating != null) minRatingInput.value      = s.minRating;
-        if (s.minReviews!= null) minReviewsInput.value     = s.minReviews;
-        reqPaymentInput.checked  = !!s.reqPayment;
-        reqDepositInput.checked  = !!s.reqDeposit;
-        reqIdentityInput.checked = !!s.reqIdentity;
-        reqPhoneInput.checked    = !!s.reqPhone;
-        reqEmailInput.checked    = !!s.reqEmail;
-
         oneTimeScanInput.checked = !!s.oneTimeScan;
+        skillMatchEnabled.checked = !!s.skillMatchEnabled;
         autoBidInput.checked     = !!s.autoBid;
 
         updateIntervalVisibility();
+        updateSkillMatchVisibility();
         updateBidOptionsVisibility();
         updateCoverLetterVisibility();
 
@@ -138,42 +132,28 @@ document.addEventListener('DOMContentLoaded', () => {
         isRunning = !isRunning;
 
         const settings = {
-            keyword:          keywordInput.value.trim(),
             excludeCountry:   excludeCountryInput.value.trim(),
             maxAge:           parseInt(maxAgeInput.value)        || 30,
             matchLimit:       parseInt(matchLimitInput.value)    || 5,
             oneTimeScan:      oneTimeScanInput.checked,
             minInterval:      parseInt(minIntervalInput.value)   || 120,
             maxInterval:      parseInt(maxIntervalInput.value)   || 240,
-            
-            minRating:        parseFloat(minRatingInput.value)   || 0,
-            minReviews:       parseInt(minReviewsInput.value)    || 0,
-            reqPayment:       reqPaymentInput.checked,
-            reqDeposit:       reqDepositInput.checked,
-            reqIdentity:      reqIdentityInput.checked,
-            reqPhone:         reqPhoneInput.checked,
-            reqEmail:         reqEmailInput.checked,
+
+            skillMatchEnabled: skillMatchEnabled.checked,
+            myKeywords:        myKeywordsInput.value.trim(),
+            skillMatchThreshold: parseInt(skillMatchThreshold.value) || 70,
 
             autoBid:          autoBidInput.checked,
-            bidStrategy:      bidStrategyInput.value || 'avg',
+            bidStrategy:      bidStrategyInput.value || 'min',
             coverMode:        coverModeAI.checked ? 'ai' : 'template',
             autoSubmit:       autoSubmitInput.checked,
-            deliveryDays:     parseInt(deliveryDaysInput.value)  || 7,
+            deliveryDays:     parseInt(deliveryDaysInput.value)  || 1,
             coverLetter:      coverLetterInput.value.trim()
         };
 
         chrome.storage.local.set({ isRunning, settings }, () => {
             updateUIState();
             chrome.runtime.sendMessage({ action: isRunning ? 'start' : 'stop' });
-        });
-    });
-
-    // ── Manual Fill ───────────────────────────────────────────────────────────
-    manualFillBtn.addEventListener('click', () => {
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            if (tabs[0]) {
-                chrome.tabs.sendMessage(tabs[0].id, { action: 'manualFill' }).catch(() => {});
-            }
         });
     });
 

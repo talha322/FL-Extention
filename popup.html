@@ -30,6 +30,7 @@
     <!-- ── Tabs ── -->
     <div class="tab-bar">
         <button class="tab-btn active" data-tab="settings">⚙️ Settings</button>
+        <button class="tab-btn"        data-tab="autobid">🤖 Auto-Bid</button>
         <button class="tab-btn"        data-tab="matches">🎯 Matches</button>
         <button class="tab-btn"        data-tab="log">📋 Log</button>
     </div>
@@ -41,22 +42,15 @@
 
         <div class="row">
             <div class="input-group">
-                <label for="keyword">Keywords <span class="hint">(comma separated)</span></label>
-                <input type="text" id="keyword" placeholder="e.g. wordpress, laravel, react">
-            </div>
-        </div>
-
-        <div class="row">
-            <div class="input-group">
                 <label for="exclude-country">Exclude Countries <span class="hint">(comma separated)</span></label>
-                <input type="text" id="exclude-country" placeholder="e.g. United States,Canada,United Kingdom">
+                <input type="text" id="exclude-country" placeholder="e.g. United States,Canada,United Kingdom" value="Afghanistan, Bangladesh, India, Nepal, Pakistan, Sri Lanka, SriLanka, Nigeria, Kenya, Indonesia">
             </div>
         </div>
 
         <div class="row">
             <div class="input-group">
                 <label for="max-age">Max Age <span class="hint">(min)</span></label>
-                <input type="number" id="max-age" value="30" min="1">
+                <input type="number" id="max-age" value="10" min="1">
             </div>
             <div class="input-group">
                 <label for="match-limit">Match Limit</label>
@@ -79,56 +73,41 @@
             <div class="range-row">
                 <input type="number" id="min-interval" value="120" placeholder="Min">
                 <span class="range-dash">—</span>
-                <input type="number" id="max-interval" value="240" placeholder="Max">
+                <input type="number" id="max-interval" value="180" placeholder="Max">
             </div>
         </div>
 
         <div class="divider"></div>
-        <div class="section-label">🧑 Client Filters</div>
+        <div class="section-label">🎯 Skill Match</div>
 
-        <div class="row">
+        <div class="toggle-row">
+            <label class="toggle-label" for="skill-match-enabled">
+                <input type="checkbox" id="skill-match-enabled">
+                <span class="toggle-text">Enable skill match before apply</span>
+            </label>
+        </div>
+
+        <div id="skill-match-options" style="display: none;">
             <div class="input-group">
-                <label for="min-rating">Min Rating <span class="hint">(0-5)</span></label>
-                <input type="number" id="min-rating" value="0" min="0" max="5" step="0.1">
+                <label for="my-keywords">My Keywords <span class="hint">(comma separated)</span></label>
+                <textarea id="my-keywords" rows="8" placeholder="e.g. laravel, php, chatbot, api integration, wordpress, react"></textarea>
             </div>
             <div class="input-group">
-                <label for="min-reviews">Min Reviews</label>
-                <input type="number" id="min-reviews" value="0" min="0">
+                <label for="skill-match-threshold">Match Threshold <span class="hint">(%)</span></label>
+                <input type="number" id="skill-match-threshold" value="70" min="1" max="100">
             </div>
+            <p class="hint" style="margin-top: 4px; line-height: 1.4;">
+                Job skills, title &amp; description se match hoga. Apply tab sirf tab khulega jab aap ke keywords ka threshold meet ho.
+            </p>
         </div>
 
-        <div class="toggle-row" style="margin-top: 5px;">
-            <label class="toggle-label" for="req-payment">
-                <input type="checkbox" id="req-payment">
-                <span class="toggle-text">Require Payment Verified</span>
-            </label>
-        </div>
-        <div class="toggle-row">
-            <label class="toggle-label" for="req-deposit">
-                <input type="checkbox" id="req-deposit">
-                <span class="toggle-text">Require Deposit Made</span>
-            </label>
-        </div>
-        <div class="toggle-row">
-            <label class="toggle-label" for="req-identity">
-                <input type="checkbox" id="req-identity">
-                <span class="toggle-text">Require Identity Verified</span>
-            </label>
-        </div>
-        <div class="toggle-row">
-            <label class="toggle-label" for="req-phone">
-                <input type="checkbox" id="req-phone">
-                <span class="toggle-text">Require Phone Verified</span>
-            </label>
-        </div>
-        <div class="toggle-row">
-            <label class="toggle-label" for="req-email">
-                <input type="checkbox" id="req-email">
-                <span class="toggle-text">Require Email Verified</span>
-            </label>
-        </div>
+        <!-- ── Action Buttons ── -->
+        <button id="toggle-btn" class="btn-primary">▶ Start Monitoring</button>
+    </div>
 
-        <div class="divider" style="margin-top: 8px;"></div>
+    <!-- ══════ TAB: Auto-Bid ══════ -->
+    <div class="tab-content" id="tab-autobid">
+
         <div class="section-label">🤖 Auto-Bid</div>
 
         <div class="toggle-row">
@@ -145,14 +124,14 @@
                 <div class="input-group">
                     <label for="bid-strategy">Bid Amount Strategy</label>
                     <select id="bid-strategy">
-                        <option value="min">Minimum (lowest budget)</option>
-                        <option value="avg" selected>Average (mid budget)</option>
+                        <option value="min" selected>Minimum (lowest budget)</option>
+                        <option value="avg">Average (mid budget)</option>
                         <option value="max">Maximum (highest budget)</option>
                     </select>
                 </div>
                 <div class="input-group">
                     <label for="delivery-days">Delivery <span class="hint">(days)</span></label>
-                    <input type="number" id="delivery-days" value="7" min="1">
+                    <input type="number" id="delivery-days" value="1" min="1">
                 </div>
             </div>
 
@@ -188,10 +167,6 @@
             </div>
 
         </div>
-
-        <!-- ── Action Buttons ── -->
-        <button id="manual-fill-btn" class="btn-secondary" style="margin-bottom: 8px; width: 100%; border: 1px solid #00c4b4; background: transparent; color: #00c4b4; padding: 10px; border-radius: 4px; font-weight: bold; cursor: pointer;">⚡ Fill Current Page</button>
-        <button id="toggle-btn" class="btn-primary">▶ Start Monitoring</button>
     </div>
 
     <!-- ══════ TAB: Matches ══════ -->

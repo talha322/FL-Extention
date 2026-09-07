@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Freelancer Job Radar",
   "version": "1.0",
-  "description": "Automatically scans Freelancer.com for fresh projects, filters by budget & keywords, and auto-fills bids.",
+  "description": "Automatically scans Freelancer.com for fresh projects, filters by budget, and auto-fills bids.",
   "permissions": [
     "storage",
     "alarms",
