@@ -146,29 +146,70 @@ document.addEventListener('DOMContentLoaded', () => {
         updateUIState();
     });
 
+    // ── Get Settings Helper ───────────────────────────────────────────────────
+    function getSettingsFromUI() {
+        return {
+            excludeCountry:      excludeCountryInput.value.trim(),
+            maxAge:              parseInt(maxAgeInput.value)        || 30,
+            matchLimit:          parseInt(matchLimitInput.value)    || 5,
+            oneTimeScan:         oneTimeScanInput.checked,
+            minInterval:         parseInt(minIntervalInput.value)   || 120,
+            maxInterval:         parseInt(maxIntervalInput.value)   || 240,
+
+            skillMatchEnabled:   skillMatchEnabled.checked,
+            myKeywords:          myKeywordsInput.value.trim(),
+            skillMatchThreshold: parseInt(skillMatchThreshold.value) || 70,
+
+            autoBid:             autoBidInput.checked,
+            bidStrategy:         bidStrategyInput.value || 'min',
+            coverMode:           coverModeAI.checked ? 'ai' : 'template',
+            autoSubmit:          autoSubmitInput.checked,
+            deliveryDays:        parseInt(deliveryDaysInput.value)  || 1,
+            coverLetter:         coverLetterInput.value.trim()
+        };
+    }
+
+    // ── Real-time Auto-Save ───────────────────────────────────────────────────
+    let autoSaveTimeout = null;
+    function autoSaveSettings(delay = 300) {
+        if (autoSaveTimeout) clearTimeout(autoSaveTimeout);
+        autoSaveTimeout = setTimeout(() => {
+            const settings = getSettingsFromUI();
+            chrome.storage.local.set({ settings });
+        }, delay);
+    }
+
+    const textInputs = [
+        excludeCountryInput, maxAgeInput, matchLimitInput,
+        minIntervalInput, maxIntervalInput, myKeywordsInput,
+        skillMatchThreshold, deliveryDaysInput, coverLetterInput
+    ];
+    textInputs.forEach(el => {
+        if (el) {
+            el.addEventListener('input', () => autoSaveSettings(300));
+            el.addEventListener('change', () => autoSaveSettings(0));
+        }
+    });
+
+    const checkAndSelectInputs = [
+        oneTimeScanInput, skillMatchEnabled, autoBidInput,
+        bidStrategyInput, coverModeAI, coverModeTemplate, autoSubmitInput
+    ];
+    checkAndSelectInputs.forEach(el => {
+        if (el) {
+            el.addEventListener('change', () => autoSaveSettings(0));
+        }
+    });
+
+    window.addEventListener('beforeunload', () => {
+        const settings = getSettingsFromUI();
+        chrome.storage.local.set({ settings });
+    });
+
     // ── Start / Stop ──────────────────────────────────────────────────────────
     toggleBtn.addEventListener('click', () => {
         isRunning = !isRunning;
-
-        const settings = {
-            excludeCountry:   excludeCountryInput.value.trim(),
-            maxAge:           parseInt(maxAgeInput.value)        || 30,
-            matchLimit:       parseInt(matchLimitInput.value)    || 5,
-            oneTimeScan:      oneTimeScanInput.checked,
-            minInterval:      parseInt(minIntervalInput.value)   || 120,
-            maxInterval:      parseInt(maxIntervalInput.value)   || 240,
-
-            skillMatchEnabled: skillMatchEnabled.checked,
-            myKeywords:        myKeywordsInput.value.trim(),
-            skillMatchThreshold: parseInt(skillMatchThreshold.value) || 70,
-
-            autoBid:          autoBidInput.checked,
-            bidStrategy:      bidStrategyInput.value || 'min',
-            coverMode:        coverModeAI.checked ? 'ai' : 'template',
-            autoSubmit:       autoSubmitInput.checked,
-            deliveryDays:     parseInt(deliveryDaysInput.value)  || 1,
-            coverLetter:      coverLetterInput.value.trim()
-        };
+        const settings = getSettingsFromUI();
 
         chrome.storage.local.set({ isRunning, settings }, () => {
             updateUIState();
