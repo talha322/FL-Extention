@@ -23,7 +23,7 @@ body {
     font-family: var(--font);
     background: var(--bg);
     color: var(--text);
-    width: 400px;
+    width: 420px;
     min-height: 500px;
     max-height: 620px;
     overflow: hidden;
@@ -257,6 +257,38 @@ textarea { resize: vertical; min-height: 100px; line-height: 1.5; }
 .toggle-text { line-height: 1.3; }
 
 /* ─── Buttons ─────────────────────────────────────────────────────────────── */
+#toggle-btn, .btn-toggle {
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: none;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #0d1117;
+    font-family: var(--font);
+    font-size: 11.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 0 2px 8px rgba(41,224,176,0.25);
+}
+#toggle-btn:hover, .btn-toggle:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(41,224,176,0.4);
+}
+#toggle-btn:active, .btn-toggle:active {
+    transform: translateY(0);
+}
+#toggle-btn.active, .btn-toggle.active {
+    background: linear-gradient(135deg, var(--danger), #d03030);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(248,81,73,0.3);
+}
+
 .btn-primary {
     width: 100%;
     padding: 11px;

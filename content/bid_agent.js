@@ -311,28 +311,41 @@
         return (text || '').toLowerCase().replace(/[^a-z0-9+#\s]/g, ' ').replace(/\s+/g, ' ').trim();
     }
 
-    function keywordMatchesJob(userKw, jobTitle, jobSkills, jobDescription) {
-        const normKw = normalizeMatchText(userKw);
-        if (!normKw || normKw.length < 2) return false;
+    function isSkillMatched(jobSkill, userKeywords) {
+        const normSkill = normalizeMatchText(jobSkill);
+        if (!normSkill) return false;
 
-        const textPool = normalizeMatchText([jobTitle, jobDescription].join(' '));
-        if (textPool.includes(normKw)) return true;
+        return userKeywords.some(userKw => {
+            const normKw = normalizeMatchText(userKw);
+            if (!normKw) return false;
 
-        for (const skill of jobSkills) {
-            const normSkill = normalizeMatchText(skill);
-            if (!normSkill) continue;
-            if (normSkill.includes(normKw) || normKw.includes(normSkill)) return true;
-
-            const kwWords = normKw.split(' ').filter(w => w.length >= 2);
-            if (kwWords.length > 1 && kwWords.every(w => normSkill.includes(w))) return true;
-        }
-        return false;
+            // Exact match (case-insensitive, e.g. php == PHP, php developer == PHP Developer)
+            return normSkill === normKw;
+        });
     }
 
     function computeSkillMatch(userKeywords, jobTitle, jobSkills, jobDescription) {
-        const matched = userKeywords.filter(kw => keywordMatchesJob(kw, jobTitle, jobSkills, jobDescription));
-        const percent = Math.round((matched.length / userKeywords.length) * 100);
-        return { percent, matched, total: userKeywords.length };
+        // Job-Centric: Calculate percentage based on Job's Required Skills
+        if (jobSkills && jobSkills.length > 0) {
+            const matched = jobSkills.filter(skill => isSkillMatched(skill, userKeywords));
+            const percent = Math.round((matched.length / jobSkills.length) * 100);
+            return { percent, matched, total: jobSkills.length };
+        }
+
+        // Fallback: If job has no tagged skills, search exact user keyword phrase in Title & Description
+        const textPool = normalizeMatchText([jobTitle, jobDescription].join(' '));
+        const matchedKws = userKeywords.filter(kw => {
+            const normKw = normalizeMatchText(kw);
+            if (!normKw || normKw.length < 2) return false;
+            const regex = new RegExp('(?:^|\\s)' + normKw.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&') + '(?:$|\\s)');
+            return regex.test(textPool);
+        });
+
+        if (matchedKws.length > 0) {
+            return { percent: 100, matched: matchedKws, total: matchedKws.length };
+        }
+
+        return { percent: 0, matched: [], total: 0 };
     }
 
     function extractCountry() {

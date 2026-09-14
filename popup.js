@@ -43,15 +43,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let isRunning = false;
 
-    // ── Tab switching ─────────────────────────────────────────────────────────
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
+    // ── Tab switching & Memory ───────────────────────────────────────────────
+    function switchTab(tabName) {
+        if (!tabName) return;
+        const targetBtn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+        const targetContent = document.getElementById(`tab-${tabName}`);
+        if (targetBtn && targetContent) {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            btn.classList.add('active');
-            document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+            targetBtn.classList.add('active');
+            targetContent.classList.add('active');
+            try { localStorage.setItem('lastActiveTab', tabName); } catch (e) {}
+            chrome.storage.local.set({ lastActiveTab: tabName });
+        }
+    }
+
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            switchTab(btn.dataset.tab);
         });
     });
+
+    // Instant synchronous restore from localStorage to prevent flash
+    try {
+        const savedTab = localStorage.getItem('lastActiveTab');
+        if (savedTab) switchTab(savedTab);
+    } catch (e) {}
 
     // ── Conditional UI ────────────────────────────────────────────────────────
     oneTimeScanInput.addEventListener('change', updateIntervalVisibility);
@@ -65,7 +82,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateIntervalVisibility() {
         intervalContainer.style.display = oneTimeScanInput.checked ? 'none' : 'flex';
         if (!isRunning) {
-            toggleBtn.textContent = oneTimeScanInput.checked ? '▶ Start One-Time Sweep' : '▶ Start Monitoring';
+            toggleBtn.textContent = oneTimeScanInput.checked ? '▶ Sweep' : '▶ Start';
+            toggleBtn.title = oneTimeScanInput.checked ? 'Start One-Time Sweep' : 'Start Monitoring';
         }
     }
 
@@ -83,7 +101,8 @@ document.addEventListener('DOMContentLoaded', () => {
     );
 
     // ── Load saved state ──────────────────────────────────────────────────────
-    chrome.storage.local.get(['settings', 'matches', 'stats', 'isRunning', 'logs'], (res) => {
+    chrome.storage.local.get(['settings', 'matches', 'stats', 'isRunning', 'logs', 'lastActiveTab'], (res) => {
+        if (res.lastActiveTab) switchTab(res.lastActiveTab);
         const s = res.settings || {};
 
         if (s.excludeCountry)    excludeCountryInput.value = s.excludeCountry;
@@ -212,13 +231,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── UI state helper ───────────────────────────────────────────────────────
     function updateUIState() {
         if (isRunning) {
-            toggleBtn.textContent = '■ Stop Radar';
+            toggleBtn.textContent = '■ Stop';
+            toggleBtn.title       = 'Click to Stop Radar';
             toggleBtn.classList.add('active');
             scanStatus.textContent = 'Scanning...';
             scanStatus.className   = 'status-badge scanning';
         } else {
             const isOneTime = oneTimeScanInput.checked;
-            toggleBtn.textContent = isOneTime ? '▶ Start One-Time Sweep' : '▶ Start Monitoring';
+            toggleBtn.textContent = isOneTime ? '▶ Sweep' : '▶ Start';
+            toggleBtn.title       = isOneTime ? 'Click to Start One-Time Sweep' : 'Click to Start Monitoring';
             toggleBtn.classList.remove('active');
             scanStatus.textContent = 'Idle';
             scanStatus.className   = 'status-badge';
